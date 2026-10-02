@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>سكربت تو فيديو | زي مستر عطا زكي</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Cairo', sans-serif; }
+    .scene-card { transition: all 0.2s; }
+    .scene-card:hover { border-color: #3b82f6; }
+    audio { width: 100%; height: 36px; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-20">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-lg">🎬</div>
+        <div>
+          <h1 class="font-bold text-lg">سكربت تو فيديو</h1>
+          <p class="text-xs text-slate-500">فيديوهات تعليمية بالرسوم المتحركة • ستايل مستر عطا زكي</p>
+        </div>
+      </div>
+      <button onclick="toggleSettings()" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg">
+        ⚙️ المفاتيح
+      </button>
+    </div>
+  </header>
+
+  <!-- Settings Panel -->
+  <div id="settings" class="hidden bg-amber-50 border-b border-amber-200">
+    <div class="max-w-4xl mx-auto px-4 py-4 space-y-3">
+      <p class="text-sm text-amber-800 font-semibold">حط المفاتيح هنا عشان التوليد الحقيقي يشتغل (بتتحفظ في المتصفح فقط):</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-slate-600">ElevenLabs API Key (للصوت المصري)</label>
+          <input id="elevenKey" type="password" placeholder="sk_..." class="w-full mt-1 p-2 border rounded-lg text-sm" />
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-600">ElevenLabs Voice ID</label>
+          <input id="voiceId" type="text" placeholder="Voice ID للصوت المصري" class="w-full mt-1 p-2 border rounded-lg text-sm" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-xs font-medium text-slate-600">OpenAI API Key (للصور + التقسيم الذكي)</label>
+          <input id="openaiKey" type="password" placeholder="sk-..." class="w-full mt-1 p-2 border rounded-lg text-sm" />
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="saveKeys()" class="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700">حفظ المفاتيح</button>
+        <button onclick="toggleSettings()" class="bg-slate-200 text-sm px-4 py-2 rounded-lg">إغلاق</button>
+      </div>
+      <p class="text-xs text-slate-500">ازاي تجيب صوت مصري: elevenlabs.io → Voices → ابحث Egyptian → انسخ Voice ID</p>
+    </div>
+  </div>
+
+  <main class="max-w-4xl mx-auto px-4 py-8">
+
+    <!-- Steps -->
+    <div class="flex items-center justify-center gap-2 mb-8 text-sm" id="steps">
+      <div class="step-item flex items-center gap-2" data-step="1">
+        <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">1</div>
+        <span class="hidden sm:inline">السكريبت</span>
+      </div>
+      <div class="w-8 h-0.5 bg-slate-200"></div>
+      <div class="step-item flex items-center gap-2" data-step="2">
+        <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold">2</div>
+        <span class="hidden sm:inline">المشاهد</span>
+      </div>
+      <div class="w-8 h-0.5 bg-slate-200"></div>
+      <div class="step-item flex items-center gap-2" data-step="3">
+        <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold">3</div>
+        <span class="hidden sm:inline">التوليد</span>
+      </div>
+      <div class="w-8 h-0.5 bg-slate-200"></div>
+      <div class="step-item flex items-center gap-2" data-step="4">
+        <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold">4</div>
+        <span class="hidden sm:inline">النتيجة</span>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="errorBox" class="hidden mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"></div>
+
+    <!-- STEP 1: Input -->
+    <div id="step1" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
+      <div>
+        <label class="block text-sm font-semibold mb-2">الصق السكريبت هنا (درس تاريخ أو جغرافيا)</label>
+        <textarea id="scriptInput" rows="10" dir="rtl"
+          class="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none leading-relaxed"
+          placeholder="مثال:
+قارة أفريقيا هي ثاني أكبر قارة في العالم بعد آسيا.
+تبلغ مساحتها حوالي 30 مليون كيلومتر مربع.
+تطل أفريقيا على المحيط الأطلسي غرباً والبحر الأحمر شرقاً.
+يوجد في أفريقيا نهر النيل أطول أنهار العالم."></textarea>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold mb-2">🎤 الصوت</label>
+          <select id="voiceSelect" class="w-full p-3 border border-slate-300 rounded-xl bg-white">
+            <option value="egyptian">صوت مصري رجالي (موصى به)</option>
+            <option value="egyptian-female">صوت مصري نسائي</option>
+            <option value="msa">فصحى</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">🎨 ستايل الرسوم</label>
+          <select id="styleSelect" class="w-full p-3 border border-slate-300 rounded-xl bg-white">
+            <option value="cartoon">كارتون تعليمي بسيط (زي القناة)</option>
+            <option value="flat">رسوم مسطحة واضحة</option>
+            <option value="whiteboard">سبورة بيضاء</option>
+          </select>
+        </div>
+      </div>
+
+      <button onclick="splitScript()" id="btnSplit"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2">
+        ✨ قسّم السكريبت لمشاهد
+      </button>
+    </div>
+
+    <!-- STEP 2: Scenes -->
+    <div id="step2" class="hidden space-y-5">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h2 class="font-bold text-lg mb-4">المشاهد المقترحة (<span id="sceneCount">0</span>)</h2>
+        <div id="scenesList" class="space-y-3"></div>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="goToStep(1)" class="flex-1 bg-slate-100 hover:bg-slate-200 font-semibold py-3 rounded-xl">رجوع</button>
+        <button onclick="generateAll()" id="btnGenerate"
+          class="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl">
+          ▶ ابدأ التوليد الحقيقي
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Generating -->
+    <div id="step3" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
+      <div class="text-5xl mb-4 animate-spin inline-block">⏳</div>
+      <h2 class="text-xl font-bold mb-2">جاري التوليد الحقيقي...</h2>
+      <p id="progressText" class="text-slate-500 mb-6">بنبدأ...</p>
+      <div class="max-w-sm mx-auto text-sm text-right space-y-2" id="progressList"></div>
+    </div>
+
+    <!-- STEP 4: Results -->
+    <div id="step4" class="hidden space-y-5">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-center">
+        <div class="text-5xl mb-3">🎉</div>
+        <h2 class="text-2xl font-bold mb-2">تم التوليد!</h2>
+        <p class="text-slate-500">الصوت والصور جاهزين. تقدر تسمع وتشاهد كل مشهد.</p>
+      </div>
+      <div id="resultsList" class="space-y-4"></div>
+      <div class="flex justify-center gap-3">
+        <button onclick="resetAll()" class="bg-slate-100 hover:bg-slate-200 font-semibold py-3 px-8 rounded-xl">
+          اعمل فيديو جديد
+        </button>
+      </div>
+      <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
+        <strong>ملاحظة:</strong> عشان تجمع كل المشاهد في فيديو واحد (MP4) حمل الصور والأصوات واستخدم برنامج زي CapCut أو DaVinci أو FFmpeg.
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="text-center text-sm text-slate-400 py-8">
+    صُنع بحب للمدرسين المصريين • مستوحى من قناة مستر عطا زكي شحتو
+  </footer>
+
+<script>
+  // ========== State ==========
+  let scenes = [];
+  let currentStep = 1;
+
+  // ========== Keys (localStorage) ==========
+  function loadKeys() {
+    document.getElementById('elevenKey').value = localStorage.getItem('elevenKey') || '';
+    document.getElementById('voiceId').value = localStorage.getItem('voiceId') || '';
+    document.getElementById('openaiKey').value = localStorage.getItem('openaiKey') || '';
+  }
+  function saveKeys() {
+    localStorage.setItem('elevenKey', document.getElementById('elevenKey').value.trim());
+    localStorage.setItem('voiceId', document.getElementById('voiceId').value.trim());
+    localStorage.setItem('openaiKey', document.getElementById('openaiKey').value.trim());
+    alert('تم حفظ المفاتيح في المتصفح');
+    toggleSettings();
+  }
+  function toggleSettings() {
+    document.getElementById('settings').classList.toggle('hidden');
+  }
+  loadKeys();
+
+  // ========== UI Helpers ==========
+  function showError(msg) {
+    const box = document.getElementById('errorBox');
+    box.textContent = msg;
+    box.classList.remove('hidden');
+  }
+  function clearError() {
+    document.getElementById('errorBox').classList.add('hidden');
+  }
+  function goToStep(n) {
+    currentStep = n;
+    [1,2,3,4].forEach(i => {
+      document.getElementById('step' + i).classList.toggle('hidden', i !== n);
+    });
+    // update step indicators
+    document.querySelectorAll('.step-item').forEach(el => {
+      const s = parseInt(el.dataset.step);
+      const circle = el.querySelector('div');
+      if (s === n) {
+        circle.className = 'w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold';
+      } else if (s < n) {
+        circle.className = 'w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold';
+      } else {
+        circle.className = 'w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold';
+      }
+    });
+  }
+
+  // ========== Split Script ==========
+  async function splitScript() {
+    clearError();
+    const script = document.getElementById('scriptInput').value.trim();
+    if (script.length < 20) {
+      showError('السكريبت قصير جدًا. اكتب درس كامل.');
+      return;
+    }
+
+    const btn = document.getElementById('btnSplit');
+    btn.disabled = true;
+    btn.innerHTML = '⏳ جاري التقسيم...';
+
+    const openaiKey = localStorage.getItem('openaiKey');
+    const style = document.getElementById('styleSelect').value;
+
+    try {
+      if (openaiKey) {
+        // استخدام GPT
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + openaiKey
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+            messages: [
+              {
+                role: 'system',
+                content: `أنت مساعد لمعلم دراسات اجتماعية مصري. قسّم السكريبت إلى مشاهد قصيرة لفيديو رسوم متحركة.
+كل مشهد = جملة أو جملتين.
+visual_prompt بالإنجليزي فقط ويفضل: simple 2D cartoon educational illustration, Egyptian school style, colorful, clear, friendly for kids, white background.
+duration بالثواني (حوالي 12-14 حرف/ثانية).
+أرجع JSON: {"scenes":[{"id":1,"text":"...","visual_prompt":"...","duration":5}]}`
+              },
+              { role: 'user', content: script }
+            ]
+          })
+        });
+        if (!res.ok) throw new Error('OpenAI فشل: ' + res.status);
+        const data = await res.json();
+        const parsed = JSON.parse(data.choices[0].message.content);
+        scenes = parsed.scenes;
+      } else {
+        // تقسيم محلي
+        scenes = localSplit(script, style);
+      }
+
+      renderScenes();
+      goToStep(2);
+    } catch (e) {
+      showError(e.message || 'حصل خطأ في التقسيم');
+      // fallback محلي
+      scenes = localSplit(script, style);
+      renderScenes();
+      goToStep(2);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '✨ قسّم السكريبت لمشاهد';
+    }
+  }
+
+  function localSplit(script, style) {
+    const stylePrompt = {
+      cartoon: 'simple 2D cartoon educational illustration, Egyptian school textbook style, colorful, clear, friendly for middle school students, white background',
+      flat: 'flat vector illustration, educational, clean design, bold colors, white background',
+      whiteboard: 'whiteboard animation style, hand-drawn black lines on white, educational markers'
+    }[style] || 'simple 2D cartoon educational illustration';
+
+    return script
+      .split(/(?<=[.؟!])\s+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 8)
+      .slice(0, 12)
+      .map((text, i) => ({
+        id: i + 1,
+        text,
+        visual_prompt: stylePrompt + ', illustrating: ' + text.slice(0, 80),
+        duration: Math.max(3.5, Math.min(11, Math.ceil(text.length / 13)))
+      }));
+  }
+
+  function renderScenes() {
+    document.getElementById('sceneCount').textContent = scenes.length;
+    const list = document.getElementById('scenesList');
+    list.innerHTML = scenes.map(s => `
+      <div class="scene-card border border-slate-200 rounded-xl p-4">
+        <div class="flex items-start gap-3">
+          <span class="bg-blue-100 text-blue-700 font-bold text-sm w-8 h-8 rounded-lg flex items-center justify-center shrink-0">${s.id}</span>
+          <div class="flex-1">
+            <p class="leading-relaxed mb-2">${s.text}</p>
+            <p class="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg">🎨 ${s.visual_prompt}</p>
+            <span class="text-xs text-slate-400 mt-1 inline-block">≈ ${s.duration} ثانية</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ========== Generate All ==========
+  async function generateAll() {
+    clearError();
+    const elevenKey = localStorage.getItem('elevenKey');
+    const voiceId = localStorage.getItem('voiceId');
+    const openaiKey = localStorage.getItem('openaiKey');
+
+    if (!elevenKey || !voiceId) {
+      showError('محتاج مفتاح ElevenLabs + Voice ID. اضغط ⚙️ المفاتيح وحطهم.');
+      return;
+    }
+
+    goToStep(3);
+    const progressText = document.getElementById('progressText');
+    const progressList = document.getElementById('progressList');
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      progressText.textContent = `مشهد ${i + 1} من ${scenes.length}`;
+      progressList.innerHTML = `
+        <div class="text-emerald-600">✓ تقسيم السكريبت</div>
+        <div class="text-blue-600">⏳ توليد صوت المشهد ${i + 1}...</div>
+        <div class="text-slate-400">توليد الصور</div>
+      `;
+
+      // TTS
+      try {
+        const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'xi-api-key': elevenKey,
+            'Accept': 'audio/mpeg'
+          },
+          body: JSON.stringify({
+            text: scene.text,
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: {
+              stability: 0.42,
+              similarity_boost: 0.78,
+              style: 0.28,
+              use_speaker_boost: true
+            }
+          })
+        });
+        if (ttsRes.ok) {
+          const blob = await ttsRes.blob();
+          scene.audioUrl = URL.createObjectURL(blob);
+        } else {
+          console.warn('TTS failed', await ttsRes.text());
+        }
+      } catch (e) {
+        console.warn('TTS error', e);
+      }
+
+      // Image
+      progressList.innerHTML = `
+        <div class="text-emerald-600">✓ تقسيم السكريبت</div>
+        <div class="text-emerald-600">✓ صوت المشهد ${i + 1}</div>
+        <div class="text-blue-600">⏳ توليد صورة المشهد ${i + 1}...</div>
+      `;
+
+      if (openaiKey) {
+        try {
+          const imgRes = await fetch('https://api.openai.com/v1/images/generations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + openaiKey
+            },
+            body: JSON.stringify({
+              model: 'dall-e-3',
+              prompt: scene.visual_prompt,
+              n: 1,
+              size: '1792x1024',
+              quality: 'standard',
+              style: 'vivid'
+            })
+          });
+          if (imgRes.ok) {
+            const imgData = await imgRes.json();
+            scene.imageUrl = imgData.data[0].url;
+          }
+        } catch (e) {
+          console.warn('Image error', e);
+        }
+      }
+    }
+
+    renderResults();
+    goToStep(4);
+  }
+
+  function renderResults() {
+    const list = document.getElementById('resultsList');
+    list.innerHTML = scenes.map(s => `
+      <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row gap-4">
+        <div class="sm:w-52 shrink-0">
+          ${s.imageUrl
+            ? `<img src="${s.imageUrl}" class="w-full rounded-lg object-cover aspect-video" alt="مشهد ${s.id}" />`
+            : `<div class="w-full aspect-video bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-sm">مفيش صورة</div>`
+          }
+        </div>
+        <div class="flex-1">
+          <p class="font-medium mb-2">مشهد ${s.id}: ${s.text}</p>
+          ${s.audioUrl
+            ? `<audio controls src="${s.audioUrl}" class="mt-2"></audio>`
+            : `<p class="text-sm text-amber-600">الصوت مش متوفر</p>`
+          }
+          ${s.imageUrl ? `<a href="${s.imageUrl}" target="_blank" class="text-xs text-blue-600 mt-2 inline-block">فتح الصورة</a>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function resetAll() {
+    scenes = [];
+    document.getElementById('scriptInput').value = '';
+    goToStep(1);
+  }
+</script>
+</body>
+</html>
